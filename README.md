@@ -1,6 +1,6 @@
 # flagship
 
-The current goal:
+The current state:
 
 ```py
 def main(
@@ -8,6 +8,24 @@ def main(
   bar: ((int, int), "wow such description"),
   baz: ((int, ...), "wow such description"),
 ):
+```
+
+produces (via. `argparse`)
+
+```
+python3 flagship.py --help
+usage: flagship.py [-h] [--bar BAR BAR] [--baz BAZ [BAZ ...]] foo
+
+This is main.
+
+positional arguments:
+  foo                  (type:`int`)
+
+optional arguments:
+  -h, --help           show this help message and exit
+  --bar BAR BAR        wow such description (type:`(int, int)`) (default:
+                       `40`)
+  --baz BAZ [BAZ ...]  wow cool (type:`(int, ...)`) (default: `400`)
 ```
 
 Logic:
