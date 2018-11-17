@@ -18,55 +18,6 @@ import inspect
 import functools
 
 
-def derive_flags(main, print_args=False):
-    sig = inspect.signature(main)
-    p = ArgumentParser(description=main.__doc__)
-
-    for param in sig.parameters.values():
-        description = ""
-
-        # Turn kwargs into optional flags
-        if param.default is inspect._empty:
-            name = param.name
-            default = None
-        else:
-            name = "--" + param.name
-            default = param.default
-
-        # Add type annotations
-        ty = None if param.annotation is inspect._empty else param.annotation
-        if ty is not bool:
-            description += "(type: `{}`) ".format(param.annotation.__name__)
-
-        # Handle Booleans
-        if ty is bool and default:
-            action = "store_false"
-        elif ty is bool:
-            action = "store_true"
-        else:
-            action = None
-
-        description += "" if action is None else "(%s)" % action.replace("_", "s ")
-
-        # Add argument
-        if action is not None:
-            p.add_argument(name, action=action, help=description)
-
-        else:
-            p.add_argument(name, type=ty, default=default, help=description)
-
-    @functools.wraps(main)
-    def new_main():
-        flags = p.parse_args()
-
-        if print_args:
-            print_flag_dict(flags.__dict__)
-
-        main(**flags.__dict__)
-
-    return new_main
-
-
 def type_to_narg(ty):
     """Converts type annotation to arguments for arg parse.
     Examples:
@@ -79,27 +30,23 @@ def type_to_narg(ty):
         return ty, None
     
     if isinstance(ty, tuple):
+        # TODO (int, int, int, ...)
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
             return ty[0], "+"
+        # TODO (int, float, int)
         elif isinstance(ty[0], type):
             return ty[0], len(ty)
         else:
             raise ValueError("`{}` should be instance of type", ty[0])
 
     if isinstance(ty, list) and isinstance(ty[0], type):
+        if len(ty) != 1:
+            raise ValueError("Lists must have only one type inside")
         return ty[0], "*"
 
     raise ValueError("Case not handled:", ty)
 
 
-
-
-@derive_flags
-def main(foo: Tuple[float, float], bar: float = 3.14, baz: bool = False):
-    """This is the docstring for main. when the `@derive_flags` decorator is added,
-    it becomes the description for the whole file.
-    """
-    print(foo, bar, baz)
 
 
 def derive_flags_abusively(main):
@@ -109,36 +56,35 @@ def derive_flags_abusively(main):
     main.__doc__ += "\nCommand Line Interface:"
 
     for param in sig.parameters.values():
-        kwargs = param.annotation if type(param.annotation) is dict else {}
+        annotation = param.annotation if type(param.annotation) is dict else {}
 
         # Check for default and set name appropriately
-        if param.default is not inspect._empty and "default" in kwargs:
+        if param.default is not inspect._empty and "default" in annotation:
             raise ValueError("default value for `%s` defined twice!" % param.name)
 
         elif param.default is not inspect._empty:
-            kwargs["default"] = param.default
+            annotation["default"] = param.default
 
-        name = "--" + param.name if "default" in kwargs else param.name
+        # Arguments that have a default become optional flags
+        name = "--" + param.name if "default" in annotation else param.name
 
         # Extend help description with boilerplate info
-        kwargs["help"] = kwargs.get("help", "")
-        if "type" in kwargs:
-            kwargs["help"] += " (type:`%s`)" % kwargs["type"].__name__
+        annotation["help"] = annotation.get("help", "")
+        if "type" in annotation:
+            annotation["help"] += " (type:`%s`)" % annotation["type"].__name__
 
-        if "action" in kwargs:
-            kwargs["help"] += " (action: `%s`)" % kwargs["action"]
+        if "action" in annotation:
+            annotation["help"] += " (action: `%s`)" % annotation["action"]
         else:
             # If there is no action, then add a meta variable
-            kwargs["metavar"] = kwargs.get("metavar", param.name[0])
+            annotation["metavar"] = annotation.get("metavar", param.name[0])
 
-        if "default" in kwargs:
-            kwargs["help"] += " (default: `%s`)" % str(kwargs["default"])
+        if "default" in annotation:
+            annotation["help"] += " (default: `%s`)" % str(annotation["default"])
 
-        p.add_argument(name, **kwargs)
-        main.__doc__ += "\n    {}: {}".format(param.name, kwargs["help"])
+        p.add_argument(name, **annotation)
+        main.__doc__ += "\n    {}: {}".format(param.name, annotation["help"])
 
-
-    #@functools.wraps(main)
     def new_main():
         flags = p.parse_args()
         main(**flags.__dict__)
@@ -147,15 +93,38 @@ def derive_flags_abusively(main):
 
     return new_main
 
-def test(
-    foo: ((int, int), "this should expect a tuple of two integers"),
-    bar: ([float], "this should expect a list of floats which may be empty") = [],
+def expect_fail(fn, arg_tuple):
+    "Only works when function takes one argument, a tuple"
 
-):
-    pass
+    try:
+        fn(arg_tuple)
+        assert False
+    except (ValueError, IndexError):
+        pass
+
+def test():
+    assert type_to_narg((int, int, int)) == (int, 3)
+    assert type_to_narg((int, int, ...)) == (int, "+")
+
+    expect_fail(type_to_narg, (1, int, ...))
+    expect_fail(type_to_narg, (1, int))
+    expect_fail(type_to_narg, (1))
+    expect_fail(type_to_narg, ())
+
+    assert type_to_narg([int, int, int]) == (int, "*")
+    expect_fail(type_to_narg, [])
+    # TODO figure this out
+    # assert type_to_narg([int, str, int]) == (int, "*")
+
+    # TODO
+    # expect_fail(type_to_narg, (int, 1, ...))
 
 
-
+# def main(
+#   foo: int, # wow such description
+#   bar: (int, int), # wow such description
+#   bar: (int, ...), # wow such description
+# ):
 
 
 @derive_flags_abusively
@@ -165,8 +134,7 @@ def main2(
         type=int,
         help="This may be the concise way I can define flags and stuff for a program "
         "without having to write some kind of parser.",
-        default=11,
-    ),
+    ) = 11,
     baz: dict(
         type=int, # type=(int, int)
         nargs=2,
@@ -183,3 +151,4 @@ def main2(
 
 if __name__ == "__main__":
     main2()
+    test()
