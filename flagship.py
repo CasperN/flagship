@@ -28,7 +28,7 @@ def type_to_narg(ty):
     """
     if isinstance(ty, type):
         return ty, None
-    
+
     if isinstance(ty, tuple):
         # TODO (int, int, int, ...)
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
@@ -37,7 +37,7 @@ def type_to_narg(ty):
         elif isinstance(ty[0], type):
             return ty[0], len(ty)
         else:
-            raise ValueError("`{}` should be instance of type", ty[0])
+            raise ValueError("`{}` should be instance of type".format(ty[0]))
 
     if isinstance(ty, list) and isinstance(ty[0], type):
         if len(ty) != 1:
@@ -49,38 +49,57 @@ def type_to_narg(ty):
 
 
 
-def derive_flags_abusively(main):
+def setup_no_description(param, param_annotation=None):
+    annotation = {}
+
+    if param_annotation is None:
+        param_annotation = param.annotation
+
+    if param.default is not inspect._empty:
+        annotation["default"] = param.default
+        name = "--" + param.name
+    else:
+        name = param.name
+
+    annotation["type"], annotation["nargs"] = type_to_narg(param_annotation)
+    # We'll end up printing the wrong type. This is the tradeoff of using values
+    # to express types instead of the native types.
+    annotation["help"] = " (type:`%s`)" % annotation["type"].__name__
+    if "default" in annotation:
+        annotation["help"] += " (default: `%s`)" % str(annotation["default"])
+
+    return name, annotation
+
+def setup_with_description(param):
+    assert len(param.annotation) == 2
+    assert isinstance(param.annotation[1], str)
+
+    name, annotation = setup_no_description(param, param_annotation=param.annotation[0])
+
+    # Prepend the description, since the message will already be partially constructed
+    annotation["help"] = param.annotation[1] + annotation["help"]
+
+    return name, annotation
+
+
+def derive_flags(main):
 
     sig = inspect.signature(main)
     p = ArgumentParser(description=main.__doc__)
     main.__doc__ += "\nCommand Line Interface:"
 
     for param in sig.parameters.values():
-        annotation = param.annotation if type(param.annotation) is dict else {}
 
-        # Check for default and set name appropriately
-        if param.default is not inspect._empty and "default" in annotation:
-            raise ValueError("default value for `%s` defined twice!" % param.name)
-
-        elif param.default is not inspect._empty:
-            annotation["default"] = param.default
-
-        # Arguments that have a default become optional flags
-        name = "--" + param.name if "default" in annotation else param.name
-
-        # Extend help description with boilerplate info
-        annotation["help"] = annotation.get("help", "")
-        if "type" in annotation:
-            annotation["help"] += " (type:`%s`)" % annotation["type"].__name__
-
-        if "action" in annotation:
-            annotation["help"] += " (action: `%s`)" % annotation["action"]
+        if isinstance(param.annotation, type):
+            name, annotation = setup_no_description(param)
         else:
-            # If there is no action, then add a meta variable
-            annotation["metavar"] = annotation.get("metavar", param.name[0])
+            assert isinstance(param.annotation, tuple)
 
-        if "default" in annotation:
-            annotation["help"] += " (default: `%s`)" % str(annotation["default"])
+            # hmm... not very flexible
+            if isinstance(param.annotation[1], str):
+                name, annotation = setup_with_description(param)
+            else:
+                name, annotation = setup_no_description(param)
 
         p.add_argument(name, **annotation)
         main.__doc__ += "\n    {}: {}".format(param.name, annotation["help"])
@@ -93,10 +112,10 @@ def derive_flags_abusively(main):
 
     return new_main
 
-@derive_flags_abusively
-def main2(
+@derive_flags
+def main(
     foo: int,
-    bar: int = 11,
+    bar: ((int, int), "wow such description") = 40,
 ):
     """This is main.
     """
@@ -105,4 +124,4 @@ def main2(
 
 
 if __name__ == "__main__":
-    main2()
+    main()
