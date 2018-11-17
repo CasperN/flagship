@@ -122,7 +122,7 @@ def derive_flags(main):
 def main(
     foo: int,
     bar: ((int, int), "wow such description") = 40,
-    baz: ((int, ...), "wow cool") = 400,
+    baz: (int, ...) = 400,
 ):
     """This is main.
     """

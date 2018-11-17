@@ -3,11 +3,14 @@
 The current state:
 
 ```py
+@derive_flags
 def main(
-  foo: (int, "wow such description"),
-  bar: ((int, int), "wow such description"),
-  baz: ((int, ...), "wow such description"),
+    foo: int,
+    bar: ((int, int), "wow such description") = 40,
+    baz: (int, ...) = 400,
 ):
+    """This is main.
+    """
 ```
 
 produces (via. `argparse`)
