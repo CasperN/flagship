@@ -17,6 +17,8 @@ from typing import Tuple
 import inspect
 import functools
 
+from test import test
+
 
 def type_to_narg(ty):
     """Converts type annotation to arguments for arg parse.
@@ -92,33 +94,6 @@ def derive_flags_abusively(main):
     new_main.__doc__ = main.__doc__
 
     return new_main
-
-def expect_fail(fn, arg_tuple):
-    "Only works when function takes one argument, a tuple"
-
-    try:
-        fn(arg_tuple)
-        assert False
-    except (ValueError, IndexError):
-        pass
-
-def test():
-    assert type_to_narg((int, int, int)) == (int, 3)
-    assert type_to_narg((int, int, ...)) == (int, "+")
-
-    expect_fail(type_to_narg, (1, int, ...))
-    expect_fail(type_to_narg, (1, int))
-    expect_fail(type_to_narg, (1))
-    expect_fail(type_to_narg, ())
-
-    assert type_to_narg([int, int, int]) == (int, "*")
-    expect_fail(type_to_narg, [])
-    # TODO figure this out
-    # assert type_to_narg([int, str, int]) == (int, "*")
-
-    # TODO
-    # expect_fail(type_to_narg, (int, 1, ...))
-
 
 # def main(
 #   foo: int, # wow such description
