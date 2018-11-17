@@ -17,8 +17,6 @@ from typing import Tuple
 import inspect
 import functools
 
-from test import test
-
 
 def type_to_narg(ty):
     """Converts type annotation to arguments for arg parse.
@@ -95,28 +93,10 @@ def derive_flags_abusively(main):
 
     return new_main
 
-# def main(
-#   foo: int, # wow such description
-#   bar: (int, int), # wow such description
-#   bar: (int, ...), # wow such description
-# ):
-
-
 @derive_flags_abusively
 def main2(
-    foo: dict(type=float, help="Well this is a thing..."),
-    bar: dict(
-        type=int,
-        help="This may be the concise way I can define flags and stuff for a program "
-        "without having to write some kind of parser.",
-    ) = 11,
-    baz: dict(
-        type=int, # type=(int, int)
-        nargs=2,
-        help="Man, python introspection is kind of ridiculous. Why is it even possible "
-        "for me to do this? This is witchcraft!",
-    ) = (128, 142),
-    gaf: dict(action="store_true") = False,
+    foo: int,
+    bar: int = 11,
 ):
     """This is main.
     """
@@ -126,4 +106,3 @@ def main2(
 
 if __name__ == "__main__":
     main2()
-    test()
