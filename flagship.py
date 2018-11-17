@@ -19,39 +19,38 @@ import functools
 
 
 def type_to_narg(ty):
-    """Converts type annotation to arguments for arg parse.
+    """Converts type annotation to type string, instance, and nargs.
     Examples:
-        int        -> type=int, nargs=None
-        (int, int) -> type=int, nargs=2
-        (int, ...) -> type=int, nargs='+'
-        [int]      -> type=int, nargs='*'
+        int        -> "int", int, None
+        (int, int) -> "(int, int)", int, 2
+        (int, ...) -> "(int, ...)", int, '+'
+        [int]      -> "[int]", int, '*'
     """
     if isinstance(ty, type):
         return ty.__name__, ty, None
 
     if isinstance(ty, tuple):
+
+        if any(t != ty[0] for t in ty[:-1]) or (ty[0] != ty[-1] and ty[-1] is not ...):
+            raise ValueError("Heterogenous tuples not supported", ty)
+
         # TODO (int, int, int, ...)
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
-            return "({}, ...)".format(ty[0].__name__), ty[0], "+"
-        # TODO (int, float, int)
-        elif isinstance(ty[0], type):
-            type_str = "("
-            for i in ty[:-1]:
-                type_str += "{}, ".format(i.__name__)
-            type_str += "{})".format(ty[-1].__name__)
+            return f"({ ty[0].__name__ }, ...)", ty[0], "+"
 
+        elif isinstance(ty[0], type):
+            type_str = "(" + ", ".join(i.__name__ for i in ty) + ")"
             return type_str, ty[0], len(ty)
+
         else:
             raise ValueError("`{}` should be instance of type".format(ty[0]))
 
     if isinstance(ty, list) and isinstance(ty[0], type):
         if len(ty) != 1:
-            raise ValueError("Lists must have only one type inside")
-        return "[{}]".format(ty[0].__name__), ty[0], "*"
+            raise ValueError("Lists must have exactly one type inside")
+        return f"[{ ty[0].__name__ }]", ty[0], "*"
 
     raise ValueError("Case not handled:", ty)
-
-
 
 
 def setup_no_description(param, param_annotation=None):
@@ -75,6 +74,7 @@ def setup_no_description(param, param_annotation=None):
         annotation["help"] += " (default: `%s`)" % str(annotation["default"])
 
     return name, annotation
+
 
 def setup_with_description(param):
     assert len(param.annotation) == 2
@@ -113,16 +113,19 @@ def derive_flags(main):
     def new_main():
         flags = p.parse_args()
         main(**flags.__dict__)
+
     new_main.__name__ = main.__name__
     new_main.__doc__ = main.__doc__
 
     return new_main
+
 
 @derive_flags
 def main(
     foo: int,
     bar: ((int, int), "wow such description") = 40,
     baz: (int, ...) = 400,
+    bun: ([int], "descriptorzzzzz") = 50,
 ):
     """This is main.
     """

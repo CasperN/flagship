@@ -12,16 +12,17 @@ def expect_fail(fn, arg_tuple):
     except (ValueError, IndexError):
         pass
 
+
 def run_all():
-    assert type_to_narg((int, int, int)) == (int, 3)
-    assert type_to_narg((int, int, ...)) == (int, "+")
+    assert type_to_narg((int, int, int)) == ("(int, int, int)", int, 3)
+    assert type_to_narg((int, int, ...)) == ("(int, ...)", int, "+")
 
     expect_fail(type_to_narg, (1, int, ...))
     expect_fail(type_to_narg, (1, int))
     expect_fail(type_to_narg, (1))
     expect_fail(type_to_narg, ())
 
-    assert type_to_narg([int]) == (int, "*")
+    assert type_to_narg([int]) == ("[int]", int, "*")
     expect_fail(type_to_narg, [int, int, int])
     # TODO maybe this should fail in a different way
     expect_fail(type_to_narg, [int, str, int])
@@ -29,6 +30,7 @@ def run_all():
 
     # TODO
     # expect_fail(type_to_narg, (int, 1, ...))
+
 
 if __name__ == "__main__":
     run_all()
