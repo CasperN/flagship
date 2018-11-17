@@ -137,8 +137,8 @@ def derive_flags_abusively(main):
         p.add_argument(name, **kwargs)
         main.__doc__ += "\n    {}: {}".format(param.name, kwargs["help"])
 
-    # @functools.wraps(main)
 
+    #@functools.wraps(main)
     def new_main():
         flags = p.parse_args()
         main(**flags.__dict__)
