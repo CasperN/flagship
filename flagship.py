@@ -27,22 +27,27 @@ def type_to_narg(ty):
         [int]      -> type=int, nargs='*'
     """
     if isinstance(ty, type):
-        return ty, None
+        return ty.__name__, ty, None
 
     if isinstance(ty, tuple):
         # TODO (int, int, int, ...)
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
-            return ty[0], "+"
+            return "({}, ...)".format(ty[0].__name__), ty[0], "+"
         # TODO (int, float, int)
         elif isinstance(ty[0], type):
-            return ty[0], len(ty)
+            type_str = "("
+            for i in ty[:-1]:
+                type_str += "{}, ".format(i.__name__)
+            type_str += "{})".format(ty[-1].__name__)
+
+            return type_str, ty[0], len(ty)
         else:
             raise ValueError("`{}` should be instance of type".format(ty[0]))
 
     if isinstance(ty, list) and isinstance(ty[0], type):
         if len(ty) != 1:
             raise ValueError("Lists must have only one type inside")
-        return ty[0], "*"
+        return "[{}]".format(ty[0].__name__), ty[0], "*"
 
     raise ValueError("Case not handled:", ty)
 
@@ -61,10 +66,11 @@ def setup_no_description(param, param_annotation=None):
     else:
         name = param.name
 
-    annotation["type"], annotation["nargs"] = type_to_narg(param_annotation)
+    type_str, annotation["type"], annotation["nargs"] = type_to_narg(param_annotation)
     # We'll end up printing the wrong type. This is the tradeoff of using values
     # to express types instead of the native types.
-    annotation["help"] = " (type:`%s`)" % annotation["type"].__name__
+    annotation["help"] = " (type:`%s`)" % type_str
+
     if "default" in annotation:
         annotation["help"] += " (default: `%s`)" % str(annotation["default"])
 
@@ -116,6 +122,7 @@ def derive_flags(main):
 def main(
     foo: int,
     bar: ((int, int), "wow such description") = 40,
+    baz: ((int, ...), "wow cool") = 400,
 ):
     """This is main.
     """
