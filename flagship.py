@@ -27,7 +27,7 @@ def type_to_narg(ty):
         [int]      -> "[int]", int, '*'
     """
     if isinstance(ty, type):
-        return ty.__name__, ty, None
+        return ty.__name__, {"type": ty}
 
     if isinstance(ty, tuple):
 
@@ -36,12 +36,12 @@ def type_to_narg(ty):
 
         # Sequence type
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
-            return f"({ ty[0].__name__ }, ...)", ty[0], "+"
+            return f"({ ty[0].__name__ }, ...)", {"type": ty[0], "nargs": "+"}
 
         # Tuple Type
         elif isinstance(ty[0], type):
             type_str = "(" + ", ".join(i.__name__ for i in ty) + ")"
-            return type_str, ty[0], len(ty)
+            return type_str, {"type": ty[0], "nargs": len(ty)}
 
         else:
             raise ValueError("`{}` should be instance of type".format(ty[0]))
@@ -50,11 +50,11 @@ def type_to_narg(ty):
     if isinstance(ty, list) and isinstance(ty[0], type):
         if len(ty) != 1:
             raise ValueError("Lists must have exactly one type inside")
-        return f"[{ ty[0].__name__ }]", ty[0], "*"
+        return f"[{ ty[0].__name__ }]", {"type": ty[0], "nargs": "*"}
 
     # Enum (choices) type
     if isinstance(ty, list) and all(isinstance(t, str) for t in ty):
-        raise NotImplementedError("Enums")
+        return "{" + ",".join(ty) + "}", {"choices": ty}
 
     raise ValueError("Case not handled:", ty)
 
@@ -71,7 +71,8 @@ def setup_no_description(param, param_annotation=None):
     else:
         name = param.name
 
-    type_str, annotation["type"], annotation["nargs"] = type_to_narg(param_annotation)
+    type_str, a = type_to_narg(param_annotation)
+    annotation.update(a)
     # We'll end up printing the wrong type. This is the tradeoff of using values
     # to express types instead of the native types.
     annotation["help"] = " (type:`%s`)" % type_str
@@ -124,7 +125,8 @@ def main(
     bar: ((int, int), "This is a tuple") = (40, 40),
     baz: (int, ...) = 400,
     bun: ([int], "descriptorzzzzz") = 50,
-    # choice: ("a b c d e".split(" "), "Choose between these options.") = "a",
+    choice: (["a", "b", "c", "d", "e"], "Choose between these options.") = "a",
+    # boolean: (bool, "this is a bool") = True,
 ):
     """This is main.
     """
