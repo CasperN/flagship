@@ -34,10 +34,11 @@ def type_to_narg(ty):
         if any(t != ty[0] for t in ty[:-1]) or (ty[0] != ty[-1] and ty[-1] is not ...):
             raise ValueError("Heterogenous tuples not supported", ty)
 
-        # TODO (int, int, int, ...)
+        # Sequence type
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
             return f"({ ty[0].__name__ }, ...)", ty[0], "+"
 
+        # Tuple Type
         elif isinstance(ty[0], type):
             type_str = "(" + ", ".join(i.__name__ for i in ty) + ")"
             return type_str, ty[0], len(ty)
@@ -45,10 +46,15 @@ def type_to_narg(ty):
         else:
             raise ValueError("`{}` should be instance of type".format(ty[0]))
 
+    # List Type
     if isinstance(ty, list) and isinstance(ty[0], type):
         if len(ty) != 1:
             raise ValueError("Lists must have exactly one type inside")
         return f"[{ ty[0].__name__ }]", ty[0], "*"
+
+    # Enum (choices) type
+    if isinstance(ty, list) and all(isinstance(t, str) for t in ty):
+        raise NotImplementedError("Enums")
 
     raise ValueError("Case not handled:", ty)
 
@@ -76,18 +82,6 @@ def setup_no_description(param, param_annotation=None):
     return name, annotation
 
 
-def setup_with_description(param):
-    assert len(param.annotation) == 2
-    assert isinstance(param.annotation[1], str)
-
-    name, annotation = setup_no_description(param, param_annotation=param.annotation[0])
-
-    # Prepend the description, since the message will already be partially constructed
-    annotation["help"] = param.annotation[1] + annotation["help"]
-
-    return name, annotation
-
-
 def derive_flags(main):
 
     sig = inspect.signature(main)
@@ -101,9 +95,13 @@ def derive_flags(main):
         else:
             assert isinstance(param.annotation, tuple)
 
-            # hmm... not very flexible
-            if isinstance(param.annotation[1], str):
-                name, annotation = setup_with_description(param)
+            if len(param.annotation) == 2 and isinstance(param.annotation[1], str):
+                name, annotation = setup_no_description(
+                    param, param_annotation=param.annotation[0]
+                )
+                # Prepend the description, since the message will already be partially constructed
+                annotation["help"] = param.annotation[1] + annotation["help"]
+
             else:
                 name, annotation = setup_no_description(param)
 
@@ -123,9 +121,10 @@ def derive_flags(main):
 @derive_flags
 def main(
     foo: int,
-    bar: ((int, int), "wow such description") = 40,
+    bar: ((int, int), "This is a tuple") = (40, 40),
     baz: (int, ...) = 400,
     bun: ([int], "descriptorzzzzz") = 50,
+    # choice: ("a b c d e".split(" "), "Choose between these options.") = "a",
 ):
     """This is main.
     """
