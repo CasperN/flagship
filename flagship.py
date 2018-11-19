@@ -6,9 +6,11 @@ your main function, and (ab)use python's type annotations to define the python t
 the command line inputs and also define the help description.
 
 TODO:
-    handle narg types with tuples
+    metavar
+    booleans
     better help message when type unspecified
-    take docstring from module `main` is from rather than `main`'s function docstring
+    `derive_flags` should take arguments e.g. docstring
+    Decorator that initializes multiple classes in main
 
 Author: casperneo@uchicago.edu
 """
@@ -30,6 +32,8 @@ def type_to_narg(ty):
         return ty.__name__, {"type": ty}
 
     if isinstance(ty, tuple):
+        if not isinstance(ty[0], type):
+            raise ValueError("`{}` should be instance of type".format(ty[0]))
 
         if any(t != ty[0] for t in ty[:-1]) or (ty[0] != ty[-1] and ty[-1] is not ...):
             raise ValueError("Heterogenous tuples not supported", ty)
@@ -39,12 +43,9 @@ def type_to_narg(ty):
             return f"({ ty[0].__name__ }, ...)", {"type": ty[0], "nargs": "+"}
 
         # Tuple Type
-        elif isinstance(ty[0], type):
+        else:
             type_str = "(" + ", ".join(i.__name__ for i in ty) + ")"
             return type_str, {"type": ty[0], "nargs": len(ty)}
-
-        else:
-            raise ValueError("`{}` should be instance of type".format(ty[0]))
 
     # List Type
     if isinstance(ty, list) and isinstance(ty[0], type):
@@ -121,14 +122,19 @@ def derive_flags(main):
 
 @derive_flags
 def main(
-    foo: int,
-    bar: ((int, int), "This is a tuple") = (40, 40),
-    baz: (int, ...) = 400,
-    bun: ([int], "descriptorzzzzz") = 50,
-    choice: (["a", "b", "c", "d", "e"], "Choose between these options.") = "a",
+    positional: int,
+    tuple: ((int, int), "This is a tuple") = (40, 40),
+    sequence: ((int, ...), "(type, ...) means at least one instance of type") = 400,
+    zero_or_more: ([int], "List of a type means zero or more instances of type") = 50,
+    choice: (
+        ["a", "b", "c", "d", "e"],
+        "Use a list of strings as the type to specify a enum. "
+        "Choose between these options.",
+    ) = "a",
     # boolean: (bool, "this is a bool") = True,
 ):
-    """This is main.
+    """This is main. The commandline flags are derived from the argument annotations and
+    the main docstring.
     """
     for i, v in locals().items():
         print("`%s`:" % i, v)

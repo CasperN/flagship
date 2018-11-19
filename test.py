@@ -14,8 +14,11 @@ def expect_fail(fn, arg_tuple):
 
 
 def run_all():
-    assert type_to_narg((int, int, int)) == ("(int, int, int)", {"type": int, "nargs": 3})
-    assert type_to_narg((int, int, ...)) == ("(int, ...)", {"type":int, "nargs":"+"})
+    assert type_to_narg((int, int, int)) == (
+        "(int, int, int)",
+        {"type": int, "nargs": 3},
+    )
+    assert type_to_narg((int, int, ...)) == ("(int, ...)", {"type": int, "nargs": "+"})
     assert type_to_narg([int]) == ("[int]", {"type": int, "nargs": "*"})
     assert type_to_narg(["a", "b", "c"]) == ("{a,b,c}", {"choices": ["a", "b", "c"]})
 
