@@ -20,7 +20,7 @@ import inspect
 import functools
 
 
-def type_to_narg(ty):
+def type_to_narg(ty, default=None):
     """Converts type annotation to type string, instance, and nargs.
     Examples:
         int        -> "int", int, None
@@ -29,7 +29,17 @@ def type_to_narg(ty):
         [int]      -> "[int]", int, '*'
     """
     if isinstance(ty, type):
-        return ty.__name__, {"type": ty}
+        # Normal type case
+        if ty is not bool:
+            return dict(type_str=ty.__name__, type=ty)
+
+        # Boolean flag case
+        elif ty is bool and default is not True:
+            return dict(action_str="store_true", action="store_true")
+
+        # Boolean negate flag case
+        else:
+            return dict(action_str="store_false", action="store_false")
 
     if isinstance(ty, tuple):
         if not isinstance(ty[0], type):
@@ -40,27 +50,27 @@ def type_to_narg(ty):
 
         # Sequence type
         if ty[-1] is Ellipsis and isinstance(ty[0], type):
-            return f"({ ty[0].__name__ }, ...)", {"type": ty[0], "nargs": "+"}
+            return dict(type_str=f"({ ty[0].__name__ }, ...)", type=ty[0], nargs="+")
 
         # Tuple Type
         else:
             type_str = "(" + ", ".join(i.__name__ for i in ty) + ")"
-            return type_str, {"type": ty[0], "nargs": len(ty)}
+            return dict(type_str=type_str, type=ty[0], nargs=len(ty))
 
     # List Type
     if isinstance(ty, list) and isinstance(ty[0], type):
         if len(ty) != 1:
             raise ValueError("Lists must have exactly one type inside")
-        return f"[{ ty[0].__name__ }]", {"type": ty[0], "nargs": "*"}
+        return dict(type_str=f"[{ ty[0].__name__ }]", type=ty[0], nargs="*")
 
     # Enum (choices) type
     if isinstance(ty, list) and all(isinstance(t, str) for t in ty):
-        return "{" + ",".join(ty) + "}", {"choices": ty}
+        return dict(type_str="{" + ",".join(ty) + "}", choices=ty)
 
     raise ValueError("Case not handled:", ty)
 
 
-def setup_no_description(param, param_annotation=None):
+def setup_argparse_kwargs(param, param_annotation=None):
     annotation = {}
 
     if param_annotation is None:
@@ -72,11 +82,16 @@ def setup_no_description(param, param_annotation=None):
     else:
         name = param.name
 
-    type_str, a = type_to_narg(param_annotation)
+    a = type_to_narg(param_annotation, default=annotation.get("default"))
     annotation.update(a)
-    # We'll end up printing the wrong type. This is the tradeoff of using values
-    # to express types instead of the native types.
-    annotation["help"] = " (type:`%s`)" % type_str
+
+    annotation["help"] = annotation.get("help", "")
+
+    if "type_str" in annotation:
+        annotation["help"] += " (type: `%s`)" % annotation.pop("type_str")
+
+    if "action_str" in annotation:
+        annotation["help"] += " (action: `%s`)" % annotation.pop("action_str")
 
     if "default" in annotation:
         annotation["help"] += " (default: `%s`)" % str(annotation["default"])
@@ -93,19 +108,19 @@ def derive_flags(main):
     for param in sig.parameters.values():
 
         if isinstance(param.annotation, type):
-            name, annotation = setup_no_description(param)
+            name, annotation = setup_argparse_kwargs(param)
         else:
             assert isinstance(param.annotation, tuple)
 
             if len(param.annotation) == 2 and isinstance(param.annotation[1], str):
-                name, annotation = setup_no_description(
+                name, annotation = setup_argparse_kwargs(
                     param, param_annotation=param.annotation[0]
                 )
                 # Prepend the description, since the message will already be partially constructed
                 annotation["help"] = param.annotation[1] + annotation["help"]
 
             else:
-                name, annotation = setup_no_description(param)
+                name, annotation = setup_argparse_kwargs(param)
 
         p.add_argument(name, **annotation)
         main.__doc__ += "\n    {}: {}".format(param.name, annotation["help"])
@@ -122,22 +137,23 @@ def derive_flags(main):
 
 @derive_flags
 def main(
-    positional: int,
+    position_1: int,
+    position_2: float,
     tuple: ((int, int), "This is a tuple") = (40, 40),
     sequence: ((int, ...), "(type, ...) means at least one instance of type") = 400,
-    zero_or_more: ([int], "List of a type means zero or more instances of type") = 50,
+    zero_or_more: ([float], "List of a type means zero or more instances of type") = 50,
     choice: (
         ["a", "b", "c", "d", "e"],
         "Use a list of strings as the type to specify a enum. "
         "Choose between these options.",
     ) = "a",
-    # boolean: (bool, "this is a bool") = True,
+    boolean: (bool, "this is a bool") = False,
 ):
     """This is main. The commandline flags are derived from the argument annotations and
     the main docstring.
     """
     for i, v in locals().items():
-        print("`%s`:" % i, v)
+        print("%s   \t=" % i, v)
 
 
 if __name__ == "__main__":
