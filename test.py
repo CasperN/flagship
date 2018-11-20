@@ -14,29 +14,28 @@ def expect_fail(fn, arg_tuple):
 
 
 def run_all():
-    assert type_to_narg((int, int, int)) == dict(
+    assert parse_type((int, int, int)) == dict(
         type_str="(int, int, int)", type=int, nargs=3
     )
-    assert type_to_narg((int, int, ...)) == dict(
+    assert parse_type((int, int, ...)) == dict(
         type_str="(int, ...)", type=int, nargs="+"
     )
-    assert type_to_narg([int]) == dict(type_str="[int]", type=int, nargs="*")
+    assert parse_type([int]) == dict(type_str="[int]", type=int, nargs="*")
 
+    assert parse_type(["a", "b", "c"]) == {"choices": ["a", "b", "c"]}
 
-    assert type_to_narg(["a", "b", "c"]) == {"choices":["a", "b", "c"]}
+    expect_fail(parse_type, (1, int, ...))
+    expect_fail(parse_type, (1, int))
+    expect_fail(parse_type, (1))
+    expect_fail(parse_type, ())
 
-    expect_fail(type_to_narg, (1, int, ...))
-    expect_fail(type_to_narg, (1, int))
-    expect_fail(type_to_narg, (1))
-    expect_fail(type_to_narg, ())
-
-    expect_fail(type_to_narg, [int, int, int])
+    expect_fail(parse_type, [int, int, int])
     # TODO maybe this should fail in a different way
-    expect_fail(type_to_narg, [int, str, int])
-    expect_fail(type_to_narg, [])
+    expect_fail(parse_type, [int, str, int])
+    expect_fail(parse_type, [])
 
     # TODO
-    # expect_fail(type_to_narg, (int, 1, ...))
+    # expect_fail(parse_type, (int, 1, ...))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ import inspect
 import functools
 
 
-def type_to_narg(ty, default=None):
+def parse_type(ty, default=None):
     """Converts type annotation to type string, instance, and nargs.
     Examples:
         int        -> "int", int, None
@@ -37,7 +37,7 @@ def type_to_narg(ty, default=None):
         elif ty is bool:
             action = "store_false" if default is True else "store_true"
             required = default is None
-            return dict(action=action, action_str=action, required=required)
+            return dict(action=action, action_str=action)
 
     if isinstance(ty, tuple):
         if not isinstance(ty[0], type):
@@ -77,11 +77,12 @@ def setup_argparse_kwargs(param, param_annotation=None):
 
     if param.default is not inspect._empty:
         annotation["default"] = param.default
+        annotation["required"] = param.default is None
         name = "--" + param.name
     else:
         name = param.name
 
-    a = type_to_narg(param_annotation, default=annotation.get("default"))
+    a = parse_type(param_annotation, default=annotation.get("default"))
     annotation.update(a)
 
     annotation["help"] = annotation.get("help", "")
@@ -140,13 +141,16 @@ def main(
     position_2: (float, "this is a description for `position_2`"),
     tuple: ((int, int), "This is a tuple") = (40, 40),
     sequence: ((int, ...), "(type, ...) means at least one instance of type") = 400,
-    zero_or_more: ([float], "List of a type means zero or more instances of type") = 50,
+    zero_or_more: ([float], "List of a type means zero or more instances of type") = [50],
     choice: (
         ["a", "b", "c", "d", "e"],
         "Use a list of strings as the type to specify a enum. "
         "Choose between these options.",
     ) = "a",
-    boolean: (bool, "this is a bool") = True,
+    boolean: (
+        bool,
+        "This is a bool. The flag is required if the default argument is None.",
+    ) = True,
 ):
     """This is main. The commandline flags are derived from the argument annotations and
     the main docstring.
