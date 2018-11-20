@@ -22,9 +22,8 @@ def run_all():
     )
     assert type_to_narg([int]) == dict(type_str="[int]", type=int, nargs="*")
 
-    assert type_to_narg(["a", "b", "c"]) == dict(
-        type_str="{a,b,c}", choices=["a", "b", "c"]
-    )
+
+    assert type_to_narg(["a", "b", "c"]) == {"choices":["a", "b", "c"]}
 
     expect_fail(type_to_narg, (1, int, ...))
     expect_fail(type_to_narg, (1, int))

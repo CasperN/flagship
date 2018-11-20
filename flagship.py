@@ -34,12 +34,10 @@ def type_to_narg(ty, default=None):
             return dict(type_str=ty.__name__, type=ty)
 
         # Boolean flag case
-        elif ty is bool and default is not True:
-            return dict(action_str="store_true", action="store_true")
-
-        # Boolean negate flag case
-        else:
-            return dict(action_str="store_false", action="store_false")
+        elif ty is bool:
+            action = "store_false" if default is True else "store_true"
+            required = default is None
+            return dict(action=action, action_str=action, required=required)
 
     if isinstance(ty, tuple):
         if not isinstance(ty[0], type):
@@ -65,7 +63,8 @@ def type_to_narg(ty, default=None):
 
     # Enum (choices) type
     if isinstance(ty, list) and all(isinstance(t, str) for t in ty):
-        return dict(type_str="{" + ",".join(ty) + "}", choices=ty)
+        # NOTE: argparse displays choices themselves so no need to specify type_str
+        return {"choices": ty}
 
     raise ValueError("Case not handled:", ty)
 
@@ -138,7 +137,7 @@ def derive_flags(main):
 @derive_flags
 def main(
     position_1: int,
-    position_2: float,
+    position_2: (float, "this is a description for `position_2`"),
     tuple: ((int, int), "This is a tuple") = (40, 40),
     sequence: ((int, ...), "(type, ...) means at least one instance of type") = 400,
     zero_or_more: ([float], "List of a type means zero or more instances of type") = 50,
@@ -147,7 +146,7 @@ def main(
         "Use a list of strings as the type to specify a enum. "
         "Choose between these options.",
     ) = "a",
-    boolean: (bool, "this is a bool") = False,
+    boolean: (bool, "this is a bool") = True,
 ):
     """This is main. The commandline flags are derived from the argument annotations and
     the main docstring.
