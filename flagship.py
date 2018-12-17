@@ -11,10 +11,11 @@ TODO:
     better help message when type unspecified
     `derive_flags` should take arguments e.g. docstring
     Decorator that initializes multiple classes in main
+    Unit tests instead of examples in docstrings.
 
 Author: casperneo@uchicago.edu
 """
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawTextHelpFormatter
 from typing import Tuple
 import inspect
 import functools
@@ -66,64 +67,88 @@ def parse_type(ty, default=None):
         # NOTE: argparse displays choices themselves so no need to specify type_str
         return {"choices": ty}
 
-    raise ValueError("Case not handled:", ty)
+    raise ValueError("Type case not handled:", ty)
 
 
-def setup_argparse_kwargs(param, param_annotation=None):
-    annotation = {}
+def _split_type_and_desc(annotation):
+    """Seperates flagship types from descriptions and raises ValueError if parsing fails.
+    Examples:
+        (int, "desc")       => int, "desc"
+        (int, int)          => (int, int), ""
+        (int, int, "desc")  => ValueError
+    """
+    # Case `arg: <type>` or `arg: (<type>, ..., <type>)`
+    if (
+        isinstance(annotation, type)
+        or isinstance(annotation, tuple)
+        and all(isinstance(a, type) for a in annotation)
+    ):
+        return annotation, ""
 
-    if param_annotation is None:
-        param_annotation = param.annotation
+    # Case `arg: (<type>, "description")`
+    elif (
+        isinstance(annotation, tuple)
+        and len(annotation) == 2
+        and isinstance(annotation[1], str)
+    ):
+        return annotation
 
+    else:
+        raise ValueError("Annotation case not handled", annotation)
+
+
+def make_argparse_argument_kwargs(param):
+    """Converts signature.param into a dictonary kwargs for ArgumentParser.add_argument()
+    """
+    kwargs = {}
+    # Parse Type and description from annotation
+    type_, kwargs["help"] = _split_type_and_desc(param.annotation)
+
+    # Handle default values.
     if param.default is not inspect._empty:
-        annotation["default"] = param.default
-        annotation["required"] = param.default is None
+        kwargs["default"] = param.default
+        kwargs["required"] = param.default is None
         name = "--" + param.name
     else:
         name = param.name
 
-    a = parse_type(param_annotation, default=annotation.get("default"))
-    annotation.update(a)
+    a = parse_type(type_, default=kwargs.get("default"))
+    kwargs.update(a)
 
-    annotation["help"] = annotation.get("help", "")
+    # Augment help string.
+    if "type_str" in kwargs:
+        kwargs["help"] += " (type: `%s`)" % kwargs.pop("type_str")
 
-    if "type_str" in annotation:
-        annotation["help"] += " (type: `%s`)" % annotation.pop("type_str")
+    if "action_str" in kwargs:
+        kwargs["help"] += " (action: `%s`)" % kwargs.pop("action_str")
 
-    if "action_str" in annotation:
-        annotation["help"] += " (action: `%s`)" % annotation.pop("action_str")
+    if "default" in kwargs:
+        kwargs["help"] += " (default: `%s`)" % str(kwargs["default"])
 
-    if "default" in annotation:
-        annotation["help"] += " (default: `%s`)" % str(annotation["default"])
-
-    return name, annotation
+    return name, kwargs
 
 
 def derive_flags(main):
+    """Create a flag interface for a "main" function.
 
+    The flags are derived from the arguments and type annotations. Example arguments:
+        `foo` ~ positional cli argument that takes a string
+        `foo: int` ~ positional cli argument that takes an integer
+        `foo: (int, "is a foo")` ~ positional cli argument that take an integer with help
+            description "is a foo"
+        `foo: (int, "is a foo") = 0` ~ optional flag `--foo` that take an integer, has
+            description "is a foo" and has default value 0.
+    """
     sig = inspect.signature(main)
+
     p = ArgumentParser(description=main.__doc__)
     main.__doc__ += "\nCommand Line Interface:"
 
     for param in sig.parameters.values():
+        name, kwargs = make_argparse_argument_kwargs(param)
 
-        if isinstance(param.annotation, type):
-            name, annotation = setup_argparse_kwargs(param)
-        else:
-            assert isinstance(param.annotation, tuple)
-
-            if len(param.annotation) == 2 and isinstance(param.annotation[1], str):
-                name, annotation = setup_argparse_kwargs(
-                    param, param_annotation=param.annotation[0]
-                )
-                # Prepend the description, since the message will already be partially constructed
-                annotation["help"] = param.annotation[1] + annotation["help"]
-
-            else:
-                name, annotation = setup_argparse_kwargs(param)
-
-        p.add_argument(name, **annotation)
-        main.__doc__ += "\n    {}: {}".format(param.name, annotation["help"])
+        p.add_argument(name, **kwargs)
+        main.__doc__ += "\n    {}: {}".format(name, kwargs["help"])
 
     def new_main():
         flags = p.parse_args()
@@ -135,13 +160,62 @@ def derive_flags(main):
     return new_main
 
 
+def init_objects_from_commandline(*classes, description=""):
+    """Given a list of classes, initialize them using commandline arguments."""
+
+    foo = "Flags are used to initialize the following classes:"
+    for c in classes:
+        foo += "\n  %s:\t%s" % (c.__name__, c.__doc__ or "")
+
+    p = ArgumentParser(
+        description=description + foo, formatter_class=RawTextHelpFormatter
+    )
+    inits = []
+    for class_ in classes:
+        obj_args = []
+        sig = inspect.signature(class_.__init__)
+        for param in sig.parameters.values():
+            if param.name == "self":
+                continue
+            name, kwargs = make_argparse_argument_kwargs(param)
+            p.add_argument(name, **kwargs)
+            obj_args.append(name.replace("-", ""))
+        inits.append(obj_args)
+
+    flags = p.parse_args().__dict__
+
+    return [c(**{a: flags[a] for a in args}) for c, args in zip(classes, inits)]
+
+
+def test_cls():
+    class A:
+        "A is a test class"
+
+        def __init__(self, x: (int, "X"), y: (float, "why")):
+            self.x, self.y = x, y
+        def __str__(self):
+            return "A ( x:{}, y:{} )".format(self.x, self.y)
+
+    class B:
+        "B is a test class too"
+
+        def __init__(self, w: ((int, int)), z: (int, "zzz") = 4):
+            self.w, self.z = w, z
+        def __str__(self):
+            return "B ( w:{}, z:{} )".format(self.w, self.z)
+
+
+    a, b = init_objects_from_commandline(A, B)
+    print(a, b)
+
+
 @derive_flags
 def main(
     position_1: int,
     position_2: (float, "this is a description for `position_2`"),
     tuple: ((int, int), "This is a tuple") = (40, 40),
     sequence: ((int, ...), "(type, ...) means at least one instance of type") = 400,
-    zero_or_more: ([float], "List of a type means zero or more instances of type") = [50],
+    zero_or_more: ([float], "List of a type means >= 0 instances of type") = [0],
     choice: (
         ["a", "b", "c", "d", "e"],
         "Use a list of strings as the type to specify a enum. "
@@ -161,3 +235,4 @@ def main(
 
 if __name__ == "__main__":
     main()
+    # test_cls()
