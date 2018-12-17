@@ -22,12 +22,7 @@ import functools
 
 
 def parse_type(ty, default=None):
-    """Converts type annotation to type string, instance, and nargs.
-    Examples:
-        int        -> "int", int, None
-        (int, int) -> "(int, int)", int, 2
-        (int, ...) -> "(int, ...)", int, '+'
-        [int]      -> "[int]", int, '*'
+    """Converts type annotation to type string, instance, action, and nargs.
     """
     if isinstance(ty, type):
         # Normal type case
@@ -37,10 +32,10 @@ def parse_type(ty, default=None):
         # Boolean flag case
         elif ty is bool:
             action = "store_false" if default is True else "store_true"
-            required = default is None
             return dict(action=action, action_str=action)
 
-    if isinstance(ty, tuple):
+    if isinstance(ty, tuple) and ty:
+
         if not isinstance(ty[0], type):
             raise ValueError("`{}` should be instance of type".format(ty[0]))
 
@@ -57,25 +52,21 @@ def parse_type(ty, default=None):
             return dict(type_str=type_str, type=ty[0], nargs=len(ty))
 
     # List Type
-    if isinstance(ty, list) and isinstance(ty[0], type):
+    if isinstance(ty, list) and ty and isinstance(ty[0], type):
         if len(ty) != 1:
             raise ValueError("Lists must have exactly one type inside")
         return dict(type_str=f"[{ ty[0].__name__ }]", type=ty[0], nargs="*")
 
     # Enum (choices) type
-    if isinstance(ty, list) and all(isinstance(t, str) for t in ty):
+    if isinstance(ty, list) and ty and all(isinstance(t, str) for t in ty):
         # NOTE: argparse displays choices themselves so no need to specify type_str
         return {"choices": ty}
 
     raise ValueError("Type case not handled:", ty)
 
 
-def _split_type_and_desc(annotation):
+def split_type_and_desc(annotation):
     """Seperates flagship types from descriptions and raises ValueError if parsing fails.
-    Examples:
-        (int, "desc")       => int, "desc"
-        (int, int)          => (int, int), ""
-        (int, int, "desc")  => ValueError
     """
     # Case `arg: <type>` or `arg: (<type>, ..., <type>)`
     if (
@@ -102,7 +93,7 @@ def make_argparse_argument_kwargs(param):
     """
     kwargs = {}
     # Parse Type and description from annotation
-    type_, kwargs["help"] = _split_type_and_desc(param.annotation)
+    type_, kwargs["help"] = split_type_and_desc(param.annotation)
 
     # Handle default values.
     if param.default is not inspect._empty:
@@ -193,6 +184,7 @@ def test_cls():
 
         def __init__(self, x: (int, "X"), y: (float, "why")):
             self.x, self.y = x, y
+
         def __str__(self):
             return "A ( x:{}, y:{} )".format(self.x, self.y)
 
@@ -201,9 +193,9 @@ def test_cls():
 
         def __init__(self, w: ((int, int)), z: (int, "zzz") = 4):
             self.w, self.z = w, z
+
         def __str__(self):
             return "B ( w:{}, z:{} )".format(self.w, self.z)
-
 
     a, b = init_objects_from_commandline(A, B)
     print(a, b)
@@ -234,5 +226,6 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    pass
+    # main()
     # test_cls()
