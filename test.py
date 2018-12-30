@@ -1,6 +1,44 @@
 #!/usr/bin/env python3
 from flagship import *
 import unittest
+from unittest import mock
+
+
+class TestDeriveFlags2(unittest.TestCase):
+    def test_1(self):
+        mock_parser = mock.MagicMock()
+        mock_parser.add_argument = mock.MagicMock()
+
+        @derive_flags2(mock_parser)
+        def main(
+            p1: int,
+            p2: typing.List[float],
+            p3: typing.Tuple[int, int] = (3, 2),
+            p4: (bool, "description") = True,
+        ):
+            pass
+
+        mock_parser.add_argument.assert_has_calls(
+            [
+                mock.call("p1", type=int, help=" (type: `int`)"),
+                mock.call("p2", type=float, nargs="*", help=" (type: `List[float]`)"),
+                mock.call(
+                    "--p3",
+                    type=int,
+                    help=" (type: `Tuple[int, int]`) (default: `(3, 2)`)",
+                    nargs=2,
+                    default=(3, 2),
+                    required=False,
+                ),
+                mock.call(
+                    "--p4",
+                    action="store_false",
+                    default=True,
+                    required=False,
+                    help="description (action: `store_false`) (default: `True`)",
+                ),
+            ]
+        )
 
 
 class TestParseType(unittest.TestCase):

@@ -16,9 +16,89 @@ TODO:
 Author: casperneo@uchicago.edu
 """
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawTextHelpFormatter
-from typing import Tuple
+from functools import wraps
+import typing
+import enum
 import inspect
 import functools
+
+
+def derive_flags2(parser=None):
+    def deriver(main):
+        p = parser or ArgumentParser(description=main.__doc__)
+        sig = inspect.signature(main)
+        for param in sig.parameters.values():
+            add_arg_from_param(p, param)
+
+        @wraps(main)
+        def with_cli():
+            flags = p.parse_args()
+            main(**flags.__dict__)
+
+        return with_cli
+
+    return deriver
+
+
+def add_arg_from_param(parser, param):
+    """Add a command line flag argument derived from a function param signature.
+
+    `parser.add_argument(...)` is called where the name, default, and type of cli flag is
+    derived from `param`.
+
+    Args:
+        parser: `argparse.ArgumentParser` instance, or a mock when testing.
+        param: `inspect.Parameter` instance
+    """
+    kwargs = {}
+    # Handle default values.
+    if param.default is not inspect._empty:
+        kwargs["default"] = param.default
+        kwargs["required"] = param.default is None
+        name = "--" + param.name
+    else:
+        name = param.name
+
+    # Split type annotation if there is a description with it
+    if type(param.annotation) is tuple:
+        ty, kwargs["help"] = param.annotation
+    else:
+        ty, kwargs["help"] = param.annotation, ""
+
+    # Add kwargs from type information and augment help description with action and type
+    if isinstance(ty, typing.GenericMeta):
+        kwargs["help"] += " (type: `" + str(ty).replace("typing.", "") + "`)"
+
+        if ty.__origin__ is typing.Tuple:
+            assert all(
+                ty.__args__[0] == a for a in ty.__args__
+            ), "Heterogenous tuples not supported"
+            kwargs["type"] = ty.__args__[0]
+            kwargs["nargs"] = len(ty.__args__)
+
+        elif ty.__origin__ is typing.List:
+            kwargs["type"] = ty.__args__[0]
+            kwargs["nargs"] = "*"
+
+        else:
+            raise ValueError("typing case not handled", ty)
+
+    elif isinstance(ty, enum.Enum):
+        kwargs["choices"] = ty._member_names_
+
+    elif ty is bool:
+        kwargs["action"] = "store_false" if param.default is True else "store_true"
+        kwargs["help"] += " (action: `%s`)" % kwargs["action"]
+
+    else:
+        kwargs["type"] = ty
+        kwargs["help"] += " (type: `%s`)" % ty.__name__
+
+    # Add default to help if it exists
+    if "default" in kwargs:
+        kwargs["help"] += " (default: `{}`)".format(kwargs["default"])
+
+    parser.add_argument(name, **kwargs)
 
 
 def parse_type(ty, default=None):
@@ -151,16 +231,19 @@ def derive_flags(main):
     return new_main
 
 
-def init_objects_from_commandline(*classes, description=""):
-    """Given a list of classes, initialize them using commandline arguments."""
-
-    foo = "Flags are used to initialize the following classes:"
+def init_objects_from_commandline(*classes, description="", parser=None):
+    """Given a list of classes, initialize them using commandline arguments.
+    Args:
+        *classes: various classes with flagship annotated `__init__`s
+        description: description to prepend to all the class descriptions
+        parser: ArgumentParser or mock object for testing.
+    """
+    desc = "Flags are used to initialize the following classes:"
     for c in classes:
-        foo += "\n  %s:\t%s" % (c.__name__, c.__doc__ or "")
+        desc += "\n  %s:\t%s" % (c.__name__, c.__doc__ or "")
 
-    p = ArgumentParser(
-        description=description + foo, formatter_class=RawTextHelpFormatter
-    )
+    p = parser or ArgumentParser(description=description + desc)
+
     inits = []
     for class_ in classes:
         obj_args = []
@@ -225,7 +308,18 @@ def main(
         print("%s   \t=" % i, v)
 
 
+@derive_flags2()
+def main(
+    p1: int,
+    p2: typing.List[float],
+    p3: typing.Tuple[int, int] = (3, 2),
+    p4: (bool, "description") = True,
+):
+    """Docstring..."""
+    print(p1, p2, p3, p4)
+
+
 if __name__ == "__main__":
     pass
-    # main()
+    main()
     # test_cls()
