@@ -15,8 +15,8 @@ TODO:
 
 Author: casperneo@uchicago.edu
 """
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawTextHelpFormatter
 from functools import wraps
+import argparse
 import typing
 import enum
 import inspect
@@ -25,10 +25,11 @@ import functools
 
 def derive_flags2(parser=None):
     def deriver(main):
-        p = parser or ArgumentParser(description=main.__doc__)
+        p = parser or argparse.ArgumentParser(description=main.__doc__)
         sig = inspect.signature(main)
         for param in sig.parameters.values():
-            add_arg_from_param(p, param)
+            name, kwargs = get_flag_kwargs(param)
+            p.add_argument(name, **kwargs)
 
         @wraps(main)
         def with_cli():
@@ -40,15 +41,12 @@ def derive_flags2(parser=None):
     return deriver
 
 
-def add_arg_from_param(parser, param):
-    """Add a command line flag argument derived from a function param signature.
-
-    `parser.add_argument(...)` is called where the name, default, and type of cli flag is
-    derived from `param`.
-
+def get_flag_kwargs(param):
+    """Returns command line flag argument derived from a function param signature.
     Args:
-        parser: `argparse.ArgumentParser` instance, or a mock when testing.
-        param: `inspect.Parameter` instance
+        param: `inspect.Parameter` instance. Number and type of cli arguments are derived
+        from the annotation of this parameter. Flag names are the parameter names. Whether
+        the flag is required or positional corresponds to the python parameter.
     """
     kwargs = {}
     # Handle default values.
@@ -97,7 +95,7 @@ def add_arg_from_param(parser, param):
     if "default" in kwargs:
         kwargs["help"] += " (default: `{}`)".format(kwargs["default"])
 
-    parser.add_argument(name, **kwargs)
+    return name, kwargs
 
 
 def parse_type(ty, default=None):
@@ -211,7 +209,7 @@ def derive_flags(main):
     """
     sig = inspect.signature(main)
 
-    p = ArgumentParser(description=main.__doc__)
+    p = argparse.ArgumentParser(description=main.__doc__)
     main.__doc__ += "\nCommand Line Interface:"
 
     for param in sig.parameters.values():
@@ -235,7 +233,7 @@ def init_objects_from_commandline(*classes, description="", parser=None):
     Args:
         *classes: various classes with flagship annotated `__init__`s
         description: description to prepend to all the class descriptions
-        parser: ArgumentParser or mock object for testing.
+        parser: ArgumentParser or mock object fqor testing.
     """
     desc = "Flags are used to initialize the following classes:"
     for c in classes:
@@ -250,14 +248,19 @@ def init_objects_from_commandline(*classes, description="", parser=None):
         for param in sig.parameters.values():
             if param.name == "self":
                 continue
-            name, kwargs = make_argparse_argument_kwargs(param)
+            name, kwargs = get_flag_kwargs(param)
             p.add_argument(name, **kwargs)
             obj_args.append(name.replace("-", ""))
         inits.append(obj_args)
 
     flags = p.parse_args().__dict__
 
-    return [c(**{a: flags[a] for a in args}) for c, args in zip(classes, inits)]
+    objs = []
+    for c, args in zip(classes, inits):
+        args = {a: flags[a] for a in args}
+        objs.append(c(**args))
+
+    return objs
 
 
 def test_cls():
@@ -311,11 +314,12 @@ def main(
 def main(
     p1: int,
     p2: typing.List[float],
-    p3: typing.Tuple[int, int] = (3, 2),
-    p4: (bool, "description") = True,
+    p3: enum.Enum("Suite", "Hearts Spades Clubs Diamonds"),
+    p4: typing.Tuple[int, int] = (3, 2),
+    p5: (bool, "description") = True,
 ):
     """Docstring..."""
-    print(p1, p2, p3, p4)
+    print(p1, p2, p3, p4, p5)
 
 
 if __name__ == "__main__":
