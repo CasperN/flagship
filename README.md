@@ -11,7 +11,7 @@ from enum import Enum
 from typing import List, Tuple
 from flagship import derive_flags
 
-Suite =  enum.Enum("Suite", "Hearts Spades Clubs Diamonds")
+Suite = Enum("Suite", "Hearts Spades Clubs Diamonds")
 
 @derive_flags()
 def main(
