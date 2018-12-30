@@ -70,9 +70,8 @@ def add_arg_from_param(parser, param):
         kwargs["help"] += " (type: `" + str(ty).replace("typing.", "") + "`)"
 
         if ty.__origin__ is typing.Tuple:
-            assert all(
-                ty.__args__[0] == a for a in ty.__args__
-            ), "Heterogenous tuples not supported"
+            if any(a != ty.__args__[0] for a in ty.__args__):
+                raise NotImplementedError("Heterogenous tuples not supported")
             kwargs["type"] = ty.__args__[0]
             kwargs["nargs"] = len(ty.__args__)
 
@@ -83,7 +82,7 @@ def add_arg_from_param(parser, param):
         else:
             raise ValueError("typing case not handled", ty)
 
-    elif isinstance(ty, enum.Enum):
+    elif isinstance(ty, enum.EnumMeta):
         kwargs["choices"] = ty._member_names_
 
     elif ty is bool:

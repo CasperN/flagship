@@ -5,9 +5,9 @@ from unittest import mock
 
 
 class TestDeriveFlags2(unittest.TestCase):
-    def test_1(self):
+    def test_comprehensive(self):
+        Suite = enum.Enum("Suite", "Hearts Spades Clubs Diamonds")
         mock_parser = mock.MagicMock()
-        mock_parser.add_argument = mock.MagicMock()
 
         @derive_flags2(mock_parser)
         def main(
@@ -15,6 +15,7 @@ class TestDeriveFlags2(unittest.TestCase):
             p2: typing.List[float],
             p3: typing.Tuple[int, int] = (3, 2),
             p4: (bool, "description") = True,
+            p5: Suite = Suite.Diamonds,
         ):
             pass
 
@@ -36,6 +37,13 @@ class TestDeriveFlags2(unittest.TestCase):
                     default=True,
                     required=False,
                     help="description (action: `store_false`) (default: `True`)",
+                ),
+                mock.call(
+                    "--p5",
+                    choices=["Hearts", "Spades", "Clubs", "Diamonds"],
+                    default=Suite.Diamonds,
+                    help=" (default: `Suite.Diamonds`)",
+                    required=False,
                 ),
             ]
         )
