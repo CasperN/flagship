@@ -47,6 +47,9 @@ def get_flag_kwargs(param):
         param: `inspect.Parameter` instance. Number and type of cli arguments are derived
         from the annotation of this parameter. Flag names are the parameter names. Whether
         the flag is required or positional corresponds to the python parameter.
+    Returns:
+        name: flagname with "--" prepended if its an optional flag.
+        kwargs: `argparse.ArgumentParser.add_argument` key word arguments.
     """
     kwargs = {}
     # Handle default values.
@@ -81,7 +84,12 @@ def get_flag_kwargs(param):
             raise ValueError("typing case not handled", ty)
 
     elif isinstance(ty, enum.EnumMeta):
-        kwargs["choices"] = ty._member_names_
+        # convert ordered dict values to a list so equality can be compared in testing
+        kwargs["choices"] = list(ty.__members__.values())
+        # Default metavar will prepend Enum name to all variants, we only need variants.
+        kwargs["metavar"] = "{" + ", ".join(ty.__members__) + "}"
+        kwargs["type"] = ty.__getitem__
+        kwargs["help"] += " (type: `%s`)" % ty.__name__
 
     elif ty is bool:
         kwargs["action"] = "store_false" if param.default is True else "store_true"
@@ -103,7 +111,9 @@ def init_objects_from_commandline(*classes, description="", parser=None):
     Args:
         *classes: various classes with flagship annotated `__init__`s
         description: description to prepend to all the class descriptions
-        parser: ArgumentParser or mock object fqor testing.
+        parser: ArgumentParser or mock object for testing.
+    Returns:
+        intances of `*classes`
     """
     desc = "Flags are used to initialize the following classes:"
     for c in classes:
@@ -133,11 +143,14 @@ def init_objects_from_commandline(*classes, description="", parser=None):
     return objs
 
 
+Suite = enum.Enum("Suite", "Hearts Spades Clubs Diamonds")
+
+
 @derive_flags()
 def main(
     p1: (int, "description for p1"),
     p2: typing.List[float],
-    p3: enum.Enum("Suite", "Hearts Spades Clubs Diamonds"),
+    p3: Suite = Suite.Diamonds,
     p4: (typing.Tuple[int, int], "description for p4") = (3, 2),
     p5: (bool, "description for p5") = True,
 ):

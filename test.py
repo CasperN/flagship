@@ -5,7 +5,7 @@ from unittest import mock
 
 
 class TestDeriveFlags(unittest.TestCase):
-    def test_comprehensive(self):
+    def test_derive_flags(self):
         Suite = enum.Enum("Suite", "Hearts Spades Clubs Diamonds")
         mock_parser = mock.MagicMock()
 
@@ -40,9 +40,11 @@ class TestDeriveFlags(unittest.TestCase):
                 ),
                 mock.call(
                     "--p5",
-                    choices=["Hearts", "Spades", "Clubs", "Diamonds"],
+                    choices=[Suite.Hearts, Suite.Spades, Suite.Clubs, Suite.Diamonds],
+                    type=Suite.__getitem__,
+                    metavar="{Hearts, Spades, Clubs, Diamonds}",
                     default=Suite.Diamonds,
-                    help=" (default: `Suite.Diamonds`)",
+                    help=" (type: `Suite`) (default: `Suite.Diamonds`)",
                     required=False,
                 ),
             ]
