@@ -1,18 +1,5 @@
 """Use Python introspection to derive command line flag interface with a decorator to main.
 
-The goal of flagship, unlike `click` or `argparse`, is to strictly adhere to the Don't
-Repeat Yourself (DRY) principle. We assume the flag arguments exactly the arguments to
-your main function, and (ab)use python's type annotations to define the python type of
-the command line inputs and also define the help description.
-
-TODO:
-    metavar
-    booleans
-    better help message when type unspecified
-    `derive_flags` should take arguments e.g. docstring
-    Decorator that initializes multiple classes in main
-    Unit tests instead of examples in docstrings.
-
 Author: casperneo@uchicago.edu
 """
 from functools import wraps
@@ -61,10 +48,17 @@ def get_flag_kwargs(param):
         name = param.name
 
     # Split type annotation if there is a description with it
-    if type(param.annotation) is tuple:
+    if type(param.annotation) is tuple and len(param.annotation) == 2:
         ty, kwargs["help"] = param.annotation
-    else:
+
+    elif isinstance(param.annotation, type):
         ty, kwargs["help"] = param.annotation, ""
+
+    else:
+        raise ValueError("Invalid annotation", param.name, param.annotation)
+
+    # Default type to string when lacking annotation
+    ty = str if ty is inspect._empty else ty
 
     # Add kwargs from type information and augment help description with action and type
     if isinstance(ty, typing.GenericMeta):
@@ -155,7 +149,7 @@ def main(
     p5: (bool, "description for p5") = True,
 ):
     """This is main."""
-    print(p1, p2, p3, p4, p5)
+    print("\n".join("{} = {}".format(*param) for param in sorted(locals().items())))
 
 
 if __name__ == "__main__":

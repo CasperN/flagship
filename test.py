@@ -50,6 +50,20 @@ class TestDeriveFlags(unittest.TestCase):
             ]
         )
 
+    def test_bad_annotations(self):
+
+        with self.assertRaises(ValueError):
+
+            @derive_flags()
+            def not_a_type(x: "lol"):
+                pass
+
+        with self.assertRaises(ValueError):
+
+            @derive_flags()
+            def tuple_too_long(x: (str, "description", "something else")):
+                pass
+
     def test_init_objects_from_commandline(self):
         # Test classes to derive objects from
         class A:

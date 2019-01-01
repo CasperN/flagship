@@ -62,5 +62,8 @@ is attached to the flag argument.
 
 ### TODO
 * Document `init_objects_from_commandline`
+* Allow for objects with flagship compliant inits to be used as annotations in
+`derive_flags()`
 * Design a way to facilitate multiple entrance with mutually exclusive flags
-* Reveal more argparse features like metavar, short flags
+* Reveal more argparse features like metavar, short flags, store_const
+    * Perhaps allow `dict` annotations for extra arguments?
